@@ -5,19 +5,11 @@ import { getDb } from './lib/firestore';
 import { checkAndIncrementRateLimit } from './lib/rate-limit';
 import type { TrimmedTrade, ChatSessionDocument } from './types/insight';
 
-// -------------------------------------------------------------------------
-// Constants
-// -------------------------------------------------------------------------
-
 /** Max trades stored in session doc (~500 bytes per trimmed trade, Firestore 1MB doc limit) */
 const MAX_SESSION_TRADES = 1000;
 
 /** Session expiry: 24 hours from creation */
 const SESSION_TTL_HOURS = 24;
-
-// -------------------------------------------------------------------------
-// Input validation
-// -------------------------------------------------------------------------
 
 interface StartChatInput {
   trades: TrimmedTrade[];
@@ -49,10 +41,6 @@ function validateInput(data: unknown): StartChatInput {
     tradesHash: d.tradesHash as string,
   };
 }
-
-// -------------------------------------------------------------------------
-// Cloud Function
-// -------------------------------------------------------------------------
 
 export const startChatSession = onCall(
   {

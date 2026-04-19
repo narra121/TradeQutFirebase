@@ -7,18 +7,10 @@ import { getReportModel, geminiApiKey } from './lib/gemini';
 import { REPORT_SYSTEM_PROMPT, tryParsePartialInsights } from './lib/prompts';
 import type { TrimmedTrade, InsightDocument, InsightsResponse } from './types/insight';
 
-// -------------------------------------------------------------------------
-// Constants
-// -------------------------------------------------------------------------
-
 const MAX_TRADES = 2000;
 
 /** Top-level fields we progressively write to Firestore as they become parseable */
 const PROGRESSIVE_FIELDS = ['summary', 'profile', 'scores', 'insights', 'tradeSpotlights', 'patterns'] as const;
-
-// -------------------------------------------------------------------------
-// Input validation
-// -------------------------------------------------------------------------
 
 interface GenerateInsightInput {
   trades: TrimmedTrade[];
@@ -59,10 +51,6 @@ function validateInput(data: unknown): GenerateInsightInput {
     tradesHash: d.tradesHash as string,
   };
 }
-
-// -------------------------------------------------------------------------
-// Cloud Function
-// -------------------------------------------------------------------------
 
 export const generateInsight = onCall(
   {

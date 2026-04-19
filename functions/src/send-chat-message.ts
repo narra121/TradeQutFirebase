@@ -7,19 +7,11 @@ import { getChatModel, geminiApiKey } from './lib/gemini';
 import { CHAT_SYSTEM_PROMPT } from './lib/prompts';
 import type { ChatSessionDocument, ChatMessageDocument, TrimmedTrade } from './types/insight';
 
-// -------------------------------------------------------------------------
-// Constants
-// -------------------------------------------------------------------------
-
 /** Minimum interval between Firestore writes during streaming (ms) */
 const STREAM_WRITE_THROTTLE_MS = 300;
 
 /** Maximum user message length */
 const MAX_MESSAGE_LENGTH = 2000;
-
-// -------------------------------------------------------------------------
-// Input validation
-// -------------------------------------------------------------------------
 
 interface SendChatInput {
   sessionId: string;
@@ -45,17 +37,9 @@ function validateInput(data: unknown): SendChatInput {
   };
 }
 
-// -------------------------------------------------------------------------
-// Helpers
-// -------------------------------------------------------------------------
-
 function buildTradeContext(trades: TrimmedTrade[]): string {
   return `Here is the trader's data (${trades.length} trades):\n${JSON.stringify(trades)}`;
 }
-
-// -------------------------------------------------------------------------
-// Cloud Function
-// -------------------------------------------------------------------------
 
 export const sendChatMessage = onCall(
   {

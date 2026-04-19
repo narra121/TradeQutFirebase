@@ -1,10 +1,5 @@
 import type { InsightsResponse } from '../types/insight';
 
-// -------------------------------------------------------------------------
-// System prompt for structured report generation
-// Copied exactly from TradeFlow/src/lib/firebase/ai.ts:57-98
-// -------------------------------------------------------------------------
-
 export const REPORT_SYSTEM_PROMPT = `You are an expert trading performance analyst. Analyze the provided trade data and return a JSON object with this exact structure:
 
 {
@@ -48,16 +43,7 @@ Return ONLY the JSON object, no markdown or extra text. Include 4-8 insights ord
 Trade data:
 `;
 
-// -------------------------------------------------------------------------
-// System prompt for chat sessions
-// -------------------------------------------------------------------------
-
 export const CHAT_SYSTEM_PROMPT = `You are an expert trading coach and performance analyst. You have access to the trader's complete trade data. Answer questions conversationally but with data-backed insights. When referencing specific trades, mention the symbol, date, and P&L. Be concise but thorough. If asked about patterns, reference specific examples from the data.`;
-
-// -------------------------------------------------------------------------
-// Partial JSON parser for progressive streaming
-// Copied from TradeFlow/src/lib/firebase/ai.ts:108-154
-// -------------------------------------------------------------------------
 
 /**
  * Try to parse the accumulated text as a partial InsightsResponse.
