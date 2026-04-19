@@ -13,11 +13,6 @@ output "firebase_project_id" {
   value       = var.gcp_project_id
 }
 
-output "recaptcha_site_key" {
-  description = "reCAPTCHA Enterprise site key for App Check"
-  value       = google_recaptcha_enterprise_key.app_check.name
-}
-
 output "firestore_database_name" {
   value = google_firestore_database.default.name
 }

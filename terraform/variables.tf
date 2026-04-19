@@ -23,12 +23,6 @@ variable "gcp_region" {
   default     = "us-central1"
 }
 
-variable "allowed_domains" {
-  description = "Domains allowed for reCAPTCHA Enterprise App Check"
-  type        = list(string)
-  default     = ["tradequt.com", "www.tradequt.com", "dev.tradequt.com", "localhost"]
-}
-
 variable "cicd_service_account" {
   description = "Service account email for CI/CD deployments"
   type        = string

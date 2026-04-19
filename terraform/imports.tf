@@ -23,12 +23,3 @@ import {
   id = "gen-lang-client-0672520490/generativelanguage.googleapis.com"
 }
 
-import {
-  to = google_project_service.recaptcha_enterprise
-  id = "gen-lang-client-0672520490/recaptchaenterprise.googleapis.com"
-}
-
-import {
-  to = google_recaptcha_enterprise_key.app_check
-  id = "projects/256912042505/keys/6LcDYr8sAAAAAP9N1_oqh4K81A_G80atbmYyE_hv"
-}

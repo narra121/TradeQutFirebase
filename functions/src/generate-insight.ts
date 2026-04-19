@@ -66,7 +66,7 @@ function validateInput(data: unknown): GenerateInsightInput {
 
 export const generateInsight = onCall(
   {
-    enforceAppCheck: true,
+    enforceAppCheck: false,
     memory: '512MiB',
     timeoutSeconds: 120,
     region: 'us-central1',

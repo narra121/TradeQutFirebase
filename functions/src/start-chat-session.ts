@@ -56,7 +56,7 @@ function validateInput(data: unknown): StartChatInput {
 
 export const startChatSession = onCall(
   {
-    enforceAppCheck: true,
+    enforceAppCheck: false,
     memory: '256MiB',
     timeoutSeconds: 30,
     region: 'us-central1',

@@ -59,7 +59,7 @@ function buildTradeContext(trades: TrimmedTrade[]): string {
 
 export const sendChatMessage = onCall(
   {
-    enforceAppCheck: true,
+    enforceAppCheck: false,
     memory: '512MiB',
     timeoutSeconds: 120,
     region: 'us-central1',
