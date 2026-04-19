@@ -50,7 +50,7 @@ jobs:
 
       - name: Create Cloud Functions .env file
         working-directory: functions
-        run: echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+        run: printf 'GEMINI_API_KEY=%s\n' "${{ secrets.GEMINI_API_KEY }}" > .env
 
       - name: Deploy Cloud Functions + Firestore Rules
         run: |
