@@ -1,5 +1,5 @@
 node_modules/
-lib/
+functions/lib/
 .firebase/
 *.log
 .env
