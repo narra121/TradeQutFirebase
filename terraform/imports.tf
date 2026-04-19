@@ -23,3 +23,13 @@ import {
   id = "gen-lang-client-0672520490/generativelanguage.googleapis.com"
 }
 
+import {
+  to = google_project_service.identitytoolkit
+  id = "gen-lang-client-0672520490/identitytoolkit.googleapis.com"
+}
+
+import {
+  to = google_identity_platform_config.default
+  id = "projects/gen-lang-client-0672520490/config"
+}
+

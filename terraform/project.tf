@@ -25,3 +25,18 @@ resource "google_project_service" "generativelanguage" {
   project = var.gcp_project_id
   service = "generativelanguage.googleapis.com"
 }
+
+resource "google_project_service" "identitytoolkit" {
+  project = var.gcp_project_id
+  service = "identitytoolkit.googleapis.com"
+}
+
+resource "google_identity_platform_config" "default" {
+  provider = google-beta
+  project  = var.gcp_project_id
+
+  depends_on = [
+    google_project_service.identitytoolkit,
+    google_firebase_project.default,
+  ]
+}
