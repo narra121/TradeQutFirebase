@@ -3,7 +3,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { insightRef } from './lib/firestore';
 import { checkAndIncrementRateLimit } from './lib/rate-limit';
-import { getReportModel } from './lib/gemini';
+import { getReportModel, geminiApiKey } from './lib/gemini';
 import { REPORT_SYSTEM_PROMPT, tryParsePartialInsights } from './lib/prompts';
 import type { TrimmedTrade, InsightDocument, InsightsResponse } from './types/insight';
 
@@ -70,6 +70,7 @@ export const generateInsight = onCall(
     memory: '512MiB',
     timeoutSeconds: 120,
     region: 'us-central1',
+    secrets: [geminiApiKey],
   },
   async (request) => {
     // 1. Auth check

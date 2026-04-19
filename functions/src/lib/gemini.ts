@@ -1,14 +1,17 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { defineSecret } from 'firebase-functions/params';
 
 const REPORT_MODEL = 'gemini-2.5-flash';
 const CHAT_MODEL = 'gemini-2.5-flash';
+
+export const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 let genAI: GoogleGenerativeAI;
 
 function getGenAI(): GoogleGenerativeAI {
   if (!genAI) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error('GEMINI_API_KEY env var not set');
+    const apiKey = geminiApiKey.value();
+    if (!apiKey) throw new Error('GEMINI_API_KEY secret not set');
     genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI;

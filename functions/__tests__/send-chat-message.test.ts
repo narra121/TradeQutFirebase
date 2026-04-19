@@ -112,6 +112,7 @@ const mockStartChat = vi.fn().mockReturnValue({
 
 vi.mock('../src/lib/gemini', () => ({
   getChatModel: () => ({ startChat: mockStartChat }),
+  geminiApiKey: { value: () => 'test-key' },
 }));
 
 // ---------------------------------------------------------------------------

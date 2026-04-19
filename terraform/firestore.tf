@@ -32,3 +32,8 @@ resource "google_project_service" "artifactregistry" {
   project = var.gcp_project_id
   service = "artifactregistry.googleapis.com"
 }
+
+resource "google_project_service" "secretmanager" {
+  project = var.gcp_project_id
+  service = "secretmanager.googleapis.com"
+}

@@ -92,6 +92,7 @@ const mockGenerateContentStream = vi.fn();
 
 vi.mock('../src/lib/gemini', () => ({
   getReportModel: () => ({ generateContentStream: mockGenerateContentStream }),
+  geminiApiKey: { value: () => 'test-key' },
 }));
 
 // ---------------------------------------------------------------------------

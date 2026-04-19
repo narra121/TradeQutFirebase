@@ -3,7 +3,7 @@ import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { chatSessionRef, chatMessagesCol } from './lib/firestore';
 import { checkMessageLimit } from './lib/rate-limit';
-import { getChatModel } from './lib/gemini';
+import { getChatModel, geminiApiKey } from './lib/gemini';
 import { CHAT_SYSTEM_PROMPT } from './lib/prompts';
 import type { ChatSessionDocument, ChatMessageDocument, TrimmedTrade } from './types/insight';
 
@@ -63,6 +63,7 @@ export const sendChatMessage = onCall(
     memory: '512MiB',
     timeoutSeconds: 120,
     region: 'us-central1',
+    secrets: [geminiApiKey],
   },
   async (request) => {
     // 1. Auth check
