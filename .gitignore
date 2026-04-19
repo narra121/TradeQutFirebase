@@ -1,0 +1,10 @@
+node_modules/
+lib/
+.firebase/
+*.log
+.env
+.env.*
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/.terraform.lock.hcl
+*.js.map

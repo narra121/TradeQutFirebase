@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == userId;
+      }
+      match /insights/{insightId} {
+        allow read: if isOwner();
+        allow write: if false;
+      }
+      match /chatSessions/{sessionId} {
+        allow read: if isOwner();
+        allow write: if false;
+        match /messages/{messageId} {
+          allow read: if isOwner();
+          allow write: if false;
+        }
+      }
+      match /rateLimits/{doc} {
+        allow read: if isOwner();
+        allow write: if false;
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

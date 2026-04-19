@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "dev": "gen-lang-client-0672520490",
+    "prod": "tradequt-prod"
+  }
+}

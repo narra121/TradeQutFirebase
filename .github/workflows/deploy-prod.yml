@@ -1,0 +1,60 @@
+name: Deploy Firebase (Prod)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "deploy-to-production" to confirm'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    if: github.event.inputs.confirmation == 'deploy-to-production'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var="environment=prod" \
+            -var="gcp_project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="gcp_project_number=${{ secrets.GCP_PROJECT_NUMBER }}" \
+            -var="cicd_service_account=${{ secrets.GCP_SERVICE_ACCOUNT }}"
+
+      - name: Install Cloud Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Cloud Functions
+        working-directory: functions
+        run: npm run build
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Deploy Cloud Functions + Firestore Rules
+        run: |
+          firebase use ${{ secrets.GCP_PROJECT_ID }}
+          firebase deploy --only functions,firestore:rules,firestore:indexes
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
