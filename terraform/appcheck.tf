@@ -19,7 +19,7 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "default" {
   provider  = google-beta
   project   = var.gcp_project_id
   app_id    = google_firebase_web_app.tradequt.app_id
-  site_key  = google_recaptcha_enterprise_key.app_check.key_id
+  site_key  = google_recaptcha_enterprise_key.app_check.name
   token_ttl = "3600s"
 
   depends_on = [google_firebase_project.default]

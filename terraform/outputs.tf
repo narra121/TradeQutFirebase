@@ -15,7 +15,7 @@ output "firebase_project_id" {
 
 output "recaptcha_site_key" {
   description = "reCAPTCHA Enterprise site key for App Check"
-  value       = google_recaptcha_enterprise_key.app_check.key_id
+  value       = google_recaptcha_enterprise_key.app_check.name
 }
 
 output "firestore_database_name" {
