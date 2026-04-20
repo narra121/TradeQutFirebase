@@ -78,12 +78,10 @@ vi.mock('../src/lib/firestore', () => ({
 // Mock lib/rate-limit
 // ---------------------------------------------------------------------------
 
-const mockCheckRateLimit = vi.fn();
-const mockIncrementRateLimit = vi.fn();
+const mockCheckAndIncrementRateLimit = vi.fn();
 
 vi.mock('../src/lib/rate-limit', () => ({
-  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
-  incrementRateLimit: (...args: unknown[]) => mockIncrementRateLimit(...args),
+  checkAndIncrementRateLimit: (...args: unknown[]) => mockCheckAndIncrementRateLimit(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -122,12 +120,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   // Default: rate limit allows
-  mockCheckRateLimit.mockResolvedValue({
+  mockCheckAndIncrementRateLimit.mockResolvedValue({
     allowed: true,
     remaining: 5,
     resetAt: new Date(),
   });
-  mockIncrementRateLimit.mockResolvedValue(undefined);
 
   // Default: no existing insight (cache miss)
   mockDocGet.mockResolvedValue(createMockDocSnapshot(null));
@@ -208,8 +205,7 @@ describe('generateInsight', () => {
     expect(result.cached).toBe(true);
     expect(result.insightId).toBe('acc-1_last30days');
     expect(mockGenerateContentStream).not.toHaveBeenCalled();
-    expect(mockCheckRateLimit).not.toHaveBeenCalled();
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    expect(mockCheckAndIncrementRateLimit).not.toHaveBeenCalled();
   });
 
   it('does not return cache when tradesHash differs', async () => {
@@ -229,24 +225,24 @@ describe('generateInsight', () => {
     expect(mockGenerateContentStream).toHaveBeenCalled();
   });
 
-  it('checks rate limit before generating a new insight', async () => {
+  it('checks and increments rate limit before generating a new insight', async () => {
     const request = createMockRequest(validData, 'user-1');
     await generateInsight(request);
 
-    expect(mockCheckRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
   });
 
   it('propagates HttpsError when rate limited', async () => {
     // Simulate the rate limiter throwing HttpsError
-    mockCheckRateLimit.mockRejectedValue(
+    mockCheckAndIncrementRateLimit.mockRejectedValue(
       Object.assign(new Error('Rate limit exceeded'), { code: 'resource-exhausted' }),
     );
 
     const request = createMockRequest(validData, 'user-1');
 
-    // checkRateLimit throws before generation starts, so no increment should happen
+    // checkAndIncrementRateLimit throws before generation starts
     await expect(generateInsight(request)).rejects.toThrow();
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    expect(mockGenerateContentStream).not.toHaveBeenCalled();
   });
 
   it('writes initial generating status to Firestore before streaming', async () => {
@@ -376,26 +372,27 @@ describe('generateInsight', () => {
     expect(errorUpdate).toBeDefined();
   });
 
-  it('does not increment rate limit on Gemini failure', async () => {
+  it('rate limit is incremented atomically before generation (even on Gemini failure)', async () => {
     mockGenerateContentStream.mockRejectedValue(new Error('Gemini API error'));
 
     const request = createMockRequest(validData, 'user-1');
 
     await expect(generateInsight(request)).rejects.toThrow(/Insight generation failed/);
 
-    expect(mockCheckRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    // With atomic check-and-increment, the rate limit is consumed before generation starts
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledTimes(1);
   });
 
-  it('increments rate limit after successful generation', async () => {
+  it('calls checkAndIncrementRateLimit exactly once on successful generation', async () => {
     const request = createMockRequest(validData, 'user-1');
     await generateInsight(request);
 
-    expect(mockIncrementRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
-    expect(mockIncrementRateLimit).toHaveBeenCalledTimes(1);
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'insightGenerations');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledTimes(1);
   });
 
-  it('does not increment rate limit on empty stream failure', async () => {
+  it('rate limit is consumed before generation on empty stream failure', async () => {
     mockGenerateContentStream.mockResolvedValue(createMockEmptyStream());
     mockTryParsePartialInsights.mockReturnValue(null);
 
@@ -403,7 +400,6 @@ describe('generateInsight', () => {
 
     await expect(generateInsight(request)).rejects.toThrow(/Insight generation failed/);
 
-    expect(mockCheckRateLimit).toHaveBeenCalled();
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledTimes(1);
   });
 });

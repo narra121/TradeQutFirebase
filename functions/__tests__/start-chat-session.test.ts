@@ -72,12 +72,10 @@ vi.mock('../src/lib/firestore', () => ({
 // Mock lib/rate-limit
 // ---------------------------------------------------------------------------
 
-const mockCheckRateLimit = vi.fn();
-const mockIncrementRateLimit = vi.fn();
+const mockCheckAndIncrementRateLimit = vi.fn();
 
 vi.mock('../src/lib/rate-limit', () => ({
-  checkRateLimit: (...args: unknown[]) => mockCheckRateLimit(...args),
-  incrementRateLimit: (...args: unknown[]) => mockIncrementRateLimit(...args),
+  checkAndIncrementRateLimit: (...args: unknown[]) => mockCheckAndIncrementRateLimit(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -89,12 +87,11 @@ import { startChatSession } from '../src/start-chat-session';
 beforeEach(() => {
   vi.clearAllMocks();
 
-  mockCheckRateLimit.mockResolvedValue({
+  mockCheckAndIncrementRateLimit.mockResolvedValue({
     allowed: true,
     remaining: 5,
     resetAt: new Date(),
   });
-  mockIncrementRateLimit.mockResolvedValue(undefined);
   mockInsightGet.mockResolvedValue({ exists: false });
 
   // Ensure doc() returns the mock auto-generated ref
@@ -151,22 +148,22 @@ describe('startChatSession', () => {
     await expect(startChatSession(request)).rejects.toThrow(/invalid-argument|period/i);
   });
 
-  it('checks rate limit for chatSessions', async () => {
+  it('checks and increments rate limit for chatSessions', async () => {
     const request = createMockRequest(validData, 'user-1');
     await startChatSession(request);
 
-    expect(mockCheckRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
   });
 
   it('throws when rate limited (propagates HttpsError)', async () => {
-    mockCheckRateLimit.mockRejectedValue(
+    mockCheckAndIncrementRateLimit.mockRejectedValue(
       Object.assign(new Error('Rate limit exceeded'), { code: 'resource-exhausted' }),
     );
 
     const request = createMockRequest(validData, 'user-1');
 
     await expect(startChatSession(request)).rejects.toThrow(/Rate limit/);
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   it('creates session doc with correct fields', async () => {
@@ -235,29 +232,30 @@ describe('startChatSession', () => {
     expect(sessionData.status).toBe('active');
   });
 
-  it('increments rate limit after successful session creation', async () => {
+  it('calls checkAndIncrementRateLimit exactly once on success', async () => {
     const request = createMockRequest(validData, 'user-1');
     await startChatSession(request);
 
-    expect(mockIncrementRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
-    expect(mockIncrementRateLimit).toHaveBeenCalledTimes(1);
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledTimes(1);
   });
 
-  it('does not increment rate limit when session creation fails', async () => {
+  it('rate limit is consumed atomically even when session creation fails', async () => {
     mockDocSet.mockRejectedValueOnce(new Error('Firestore write failed'));
 
     const request = createMockRequest(validData, 'user-1');
 
     await expect(startChatSession(request)).rejects.toThrow(/Firestore write failed/);
 
-    expect(mockCheckRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
-    expect(mockIncrementRateLimit).not.toHaveBeenCalled();
+    // With atomic check-and-increment, rate limit is consumed before session creation
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledWith('user-1', 'chatSessions');
+    expect(mockCheckAndIncrementRateLimit).toHaveBeenCalledTimes(1);
   });
 
-  it('calls checkRateLimit before sessionRef.set and incrementRateLimit after', async () => {
+  it('calls checkAndIncrementRateLimit before sessionRef.set', async () => {
     const callOrder: string[] = [];
-    mockCheckRateLimit.mockImplementation(async () => {
-      callOrder.push('checkRateLimit');
+    mockCheckAndIncrementRateLimit.mockImplementation(async () => {
+      callOrder.push('checkAndIncrementRateLimit');
       return { allowed: true, remaining: 5, resetAt: new Date() };
     });
     mockInsightGet.mockImplementation(async () => {
@@ -267,13 +265,10 @@ describe('startChatSession', () => {
     mockDocSet.mockImplementation(async () => {
       callOrder.push('sessionRef.set');
     });
-    mockIncrementRateLimit.mockImplementation(async () => {
-      callOrder.push('incrementRateLimit');
-    });
 
     const request = createMockRequest(validData, 'user-1');
     await startChatSession(request);
 
-    expect(callOrder).toEqual(['checkRateLimit', 'insightRef.get', 'sessionRef.set', 'incrementRateLimit']);
+    expect(callOrder).toEqual(['checkAndIncrementRateLimit', 'insightRef.get', 'sessionRef.set']);
   });
 });

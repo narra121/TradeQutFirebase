@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { insightRef } from './lib/firestore';
-import { checkRateLimit, incrementRateLimit } from './lib/rate-limit';
+import { checkAndIncrementRateLimit } from './lib/rate-limit';
 import { getReportModel, geminiApiKey } from './lib/gemini';
 import { REPORT_SYSTEM_PROMPT, tryParsePartialInsights } from './lib/prompts';
 import type { TrimmedTrade, InsightDocument, InsightsResponse } from './types/insight';
@@ -84,8 +84,8 @@ export const generateInsight = onCall(
       }
     }
 
-    // 4. Rate limit check (verify quota BEFORE expensive generation)
-    await checkRateLimit(userId, 'insightGenerations');
+    // 4. Rate limit check + increment atomically (before expensive generation)
+    await checkAndIncrementRateLimit(userId, 'insightGenerations');
 
     // 5. Write initial generating doc
     const initialDoc: InsightDocument = {
@@ -106,6 +106,8 @@ export const generateInsight = onCall(
 
       let accumulated = '';
       const writtenFields = new Set<string>();
+      let pendingUpdates: Record<string, unknown> = {};
+      let lastWriteTime = 0;
 
       for await (const chunk of result.stream) {
         const text = chunk.text();
@@ -116,19 +118,30 @@ export const generateInsight = onCall(
         const partial = tryParsePartialInsights(accumulated);
         if (!partial) continue;
 
-        // Write newly-available top-level fields to Firestore
-        const updates: Record<string, unknown> = {};
+        // Accumulate newly-available top-level fields into pending batch
         for (const field of PROGRESSIVE_FIELDS) {
           if (partial[field as keyof InsightsResponse] !== undefined && !writtenFields.has(field)) {
-            updates[field] = partial[field as keyof InsightsResponse];
+            pendingUpdates[field] = partial[field as keyof InsightsResponse];
             writtenFields.add(field);
           }
         }
 
-        if (Object.keys(updates).length > 0) {
-          await ref.update(updates);
-          logger.info('Progressive update', { userId, insightId, fields: Object.keys(updates) });
+        if (Object.keys(pendingUpdates).length > 0) {
+          const now = Date.now();
+          if (now - lastWriteTime >= 500 || Object.keys(pendingUpdates).length >= 3) {
+            await ref.update(pendingUpdates);
+            logger.info('Progressive update', { userId, insightId, fields: Object.keys(pendingUpdates) });
+            pendingUpdates = {};
+            lastWriteTime = now;
+          }
         }
+      }
+
+      // Flush any remaining pending updates before final parse
+      if (Object.keys(pendingUpdates).length > 0) {
+        await ref.update(pendingUpdates);
+        logger.info('Progressive update (flush)', { userId, insightId, fields: Object.keys(pendingUpdates) });
+        pendingUpdates = {};
       }
 
       // 7. Final parse and write
@@ -153,9 +166,6 @@ export const generateInsight = onCall(
         }
       }
       await ref.update(finalUpdate);
-
-      // Increment rate limit only after successful generation
-      await incrementRateLimit(userId, 'insightGenerations');
 
       logger.info('Insight generation complete', { userId, insightId });
       return { cached: false, insightId };
