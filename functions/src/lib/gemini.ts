@@ -18,12 +18,15 @@ function getGenAI(): GoogleGenerativeAI {
 }
 
 export function getReportModel(): GenerativeModel {
-  return getGenAI().getGenerativeModel({ model: REPORT_MODEL });
+  return getGenAI().getGenerativeModel({
+    model: REPORT_MODEL,
+    generationConfig: { temperature: 0, thinkingConfig: { thinkingBudget: 0 } } as any,
+  });
 }
 
 export function getChatModel(): GenerativeModel {
   return getGenAI().getGenerativeModel({
     model: CHAT_MODEL,
-    generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } } as any,
   });
 }
