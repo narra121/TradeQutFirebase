@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
-import { getDb } from './lib/firestore';
+import { getDb, insightRef } from './lib/firestore';
 import { checkRateLimit, incrementRateLimit } from './lib/rate-limit';
-import type { TrimmedTrade, ChatSessionDocument } from './types/insight';
+import type { TrimmedTrade, ChatSessionDocument, InsightDocument } from './types/insight';
 
 /** Max trades stored in session doc (~500 bytes per trimmed trade, Firestore 1MB doc limit) */
 const MAX_SESSION_TRADES = 1000;
@@ -61,15 +61,31 @@ export const startChatSession = onCall(
     }
 
     // 2. Input validation
-    const { trades, accountId, period, tradesHash, insightId, insightsData } = validateInput(request.data);
+    const { trades, accountId, period, tradesHash, insightsData: clientInsightsData } = validateInput(request.data);
 
     // 3. Rate limit check (verify quota BEFORE session creation)
     await checkRateLimit(userId, 'chatSessions');
 
-    // 4. Truncate trades to fit within Firestore 1MB doc limit
+    // 4. Derive insightId deterministically (same formula as generateInsight)
+    const derivedInsightId = `${accountId}_${period}`;
+
+    // 5. Read insight doc from Firestore to get insights data if not provided by frontend
+    let resolvedInsightsData = clientInsightsData;
+    if (!resolvedInsightsData) {
+      const insightSnap = await insightRef(userId, derivedInsightId).get();
+      if (insightSnap.exists) {
+        const insightDoc = insightSnap.data() as InsightDocument;
+        if (insightDoc.status === 'complete') {
+          const { status, tradesHash: _h, generatedAt: _g, error: _e, ...insightFields } = insightDoc;
+          resolvedInsightsData = JSON.stringify(insightFields);
+        }
+      }
+    }
+
+    // 6. Truncate trades to fit within Firestore 1MB doc limit
     const truncatedTrades = trades.slice(0, MAX_SESSION_TRADES);
 
-    // 5. Create session document
+    // 7. Create session document
     const now = Timestamp.now();
     const expiresAt = Timestamp.fromMillis(
       now.toMillis() + SESSION_TTL_HOURS * 60 * 60 * 1000,
@@ -84,8 +100,8 @@ export const startChatSession = onCall(
       createdAt: now,
       expiresAt,
       status: 'active',
-      ...(insightId && { insightId }),
-      ...(insightsData && { insightsData }),
+      insightId: derivedInsightId,
+      ...(resolvedInsightsData && { insightsData: resolvedInsightsData }),
     };
 
     const db = getDb();

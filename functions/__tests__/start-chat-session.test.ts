@@ -57,11 +57,15 @@ vi.mock('firebase-functions', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock lib/firestore — getDb returns our mockDb
+// Mock lib/firestore — getDb returns our mockDb, insightRef returns a doc ref
 // ---------------------------------------------------------------------------
+
+const mockInsightGet = vi.fn().mockResolvedValue({ exists: false });
+const mockInsightDocRef = { get: mockInsightGet };
 
 vi.mock('../src/lib/firestore', () => ({
   getDb: () => mockDb,
+  insightRef: () => mockInsightDocRef,
 }));
 
 // ---------------------------------------------------------------------------
@@ -91,6 +95,7 @@ beforeEach(() => {
     resetAt: new Date(),
   });
   mockIncrementRateLimit.mockResolvedValue(undefined);
+  mockInsightGet.mockResolvedValue({ exists: false });
 
   // Ensure doc() returns the mock auto-generated ref
   mockCollectionDoc.mockReturnValue(mockAutoDocRef);
@@ -175,6 +180,7 @@ describe('startChatSession', () => {
     expect(sessionData.tradesHash).toBe('hash-xyz');
     expect(sessionData.status).toBe('active');
     expect(sessionData.messageCount).toBe(0);
+    expect(sessionData.insightId).toBe('acc-1_last30days');
     expect(sessionData.trades).toBeDefined();
     expect(Array.isArray(sessionData.trades)).toBe(true);
   });
@@ -254,6 +260,10 @@ describe('startChatSession', () => {
       callOrder.push('checkRateLimit');
       return { allowed: true, remaining: 5, resetAt: new Date() };
     });
+    mockInsightGet.mockImplementation(async () => {
+      callOrder.push('insightRef.get');
+      return { exists: false };
+    });
     mockDocSet.mockImplementation(async () => {
       callOrder.push('sessionRef.set');
     });
@@ -264,6 +274,6 @@ describe('startChatSession', () => {
     const request = createMockRequest(validData, 'user-1');
     await startChatSession(request);
 
-    expect(callOrder).toEqual(['checkRateLimit', 'sessionRef.set', 'incrementRateLimit']);
+    expect(callOrder).toEqual(['checkRateLimit', 'insightRef.get', 'sessionRef.set', 'incrementRateLimit']);
   });
 });
