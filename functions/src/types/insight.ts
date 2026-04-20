@@ -98,6 +98,7 @@ export interface ChatSessionDocument {
   createdAt: Timestamp;
   expiresAt: Timestamp;
   status: ChatSessionStatus;
+  title?: string;
 }
 
 export interface ChatMessageDocument {

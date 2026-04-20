@@ -85,6 +85,91 @@ export async function checkAndIncrementRateLimit(
 }
 
 // -------------------------------------------------------------------------
+// Check-only (no increment) via Firestore transaction
+// -------------------------------------------------------------------------
+
+/**
+ * Checks whether the rate limit has been exceeded WITHOUT incrementing.
+ * Useful when you want to verify quota before starting expensive work,
+ * then increment only after success.
+ *
+ * @throws HttpsError with 'resource-exhausted' if rate limit exceeded
+ */
+export async function checkRateLimit(
+  userId: string,
+  type: RateLimitType,
+): Promise<RateLimitCheckResult> {
+  const config = LIMITS[type];
+  const ref = rateLimitRef(userId);
+
+  return getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const doc = snap.data() as RateLimitDocument | undefined;
+
+    let window: RateLimitWindow = doc?.[type] ?? freshWindow();
+
+    // Reset window if expired (write fresh window so next check sees clean state)
+    if (isWindowExpired(window, config.windowHours)) {
+      window = freshWindow();
+      tx.set(ref, { [type]: window }, { merge: true });
+    }
+
+    if (window.count >= config.maxCount) {
+      const resetAt = new Date(
+        window.windowStart.toMillis() + config.windowHours * 60 * 60 * 1000,
+      );
+      throw new HttpsError(
+        'resource-exhausted',
+        `Rate limit exceeded for ${type}. Try again after ${resetAt.toISOString()}.`,
+      );
+    }
+
+    return {
+      allowed: true,
+      remaining: config.maxCount - window.count,
+      resetAt: new Date(
+        window.windowStart.toMillis() + config.windowHours * 60 * 60 * 1000,
+      ),
+    };
+  });
+}
+
+// -------------------------------------------------------------------------
+// Increment-only (no limit check) via Firestore transaction
+// -------------------------------------------------------------------------
+
+/**
+ * Increments the rate limit counter by 1. Resets the window if expired.
+ * Does NOT check the limit — assumes the caller already verified via checkRateLimit.
+ */
+export async function incrementRateLimit(
+  userId: string,
+  type: RateLimitType,
+): Promise<void> {
+  const config = LIMITS[type];
+  const ref = rateLimitRef(userId);
+
+  await getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const doc = snap.data() as RateLimitDocument | undefined;
+
+    let window: RateLimitWindow = doc?.[type] ?? freshWindow();
+
+    // Reset window if expired
+    if (isWindowExpired(window, config.windowHours)) {
+      window = freshWindow();
+    }
+
+    const updatedWindow: RateLimitWindow = {
+      count: window.count + 1,
+      windowStart: window.windowStart,
+    };
+
+    tx.set(ref, { [type]: updatedWindow }, { merge: true });
+  });
+}
+
+// -------------------------------------------------------------------------
 // Message limit check (no transaction needed -- read-only check)
 // -------------------------------------------------------------------------
 

@@ -95,11 +95,15 @@ export const sendChatMessage = onCall(
     };
     await messagesCol.doc(`msg_${String(userMessageIndex).padStart(4, '0')}`).set(userMessageDoc);
 
-    // 6. Update session: status 'generating', increment messageCount
-    await sessionDocRef.update({
+    // 6. Update session: status 'generating', increment messageCount, set title on first message
+    const sessionUpdate: Record<string, unknown> = {
       status: 'generating',
       messageCount: FieldValue.increment(1),
-    });
+    };
+    if (session.messageCount === 0) {
+      sessionUpdate.title = message.slice(0, 50);
+    }
+    await sessionDocRef.update(sessionUpdate);
 
     const modelMessageIndex = userMessageIndex + 1;
     const modelMessageRef = messagesCol.doc(`msg_${String(modelMessageIndex).padStart(4, '0')}`);

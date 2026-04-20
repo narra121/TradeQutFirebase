@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { getDb } from './lib/firestore';
-import { checkAndIncrementRateLimit } from './lib/rate-limit';
+import { checkRateLimit, incrementRateLimit } from './lib/rate-limit';
 import type { TrimmedTrade, ChatSessionDocument } from './types/insight';
 
 /** Max trades stored in session doc (~500 bytes per trimmed trade, Firestore 1MB doc limit) */
@@ -59,8 +59,8 @@ export const startChatSession = onCall(
     // 2. Input validation
     const { trades, accountId, period, tradesHash } = validateInput(request.data);
 
-    // 3. Rate limit check
-    await checkAndIncrementRateLimit(userId, 'chatSessions');
+    // 3. Rate limit check (verify quota BEFORE session creation)
+    await checkRateLimit(userId, 'chatSessions');
 
     // 4. Truncate trades to fit within Firestore 1MB doc limit
     const truncatedTrades = trades.slice(0, MAX_SESSION_TRADES);
@@ -85,6 +85,9 @@ export const startChatSession = onCall(
     const db = getDb();
     const sessionRef = db.collection(`users/${userId}/chatSessions`).doc();
     await sessionRef.set(sessionDoc);
+
+    // Increment rate limit only after successful session creation
+    await incrementRateLimit(userId, 'chatSessions');
 
     logger.info('Chat session created', {
       userId,

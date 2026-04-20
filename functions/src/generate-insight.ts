@@ -2,7 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { insightRef } from './lib/firestore';
-import { checkAndIncrementRateLimit } from './lib/rate-limit';
+import { checkRateLimit, incrementRateLimit } from './lib/rate-limit';
 import { getReportModel, geminiApiKey } from './lib/gemini';
 import { REPORT_SYSTEM_PROMPT, tryParsePartialInsights } from './lib/prompts';
 import type { TrimmedTrade, InsightDocument, InsightsResponse } from './types/insight';
@@ -84,8 +84,8 @@ export const generateInsight = onCall(
       }
     }
 
-    // 4. Rate limit check
-    await checkAndIncrementRateLimit(userId, 'insightGenerations');
+    // 4. Rate limit check (verify quota BEFORE expensive generation)
+    await checkRateLimit(userId, 'insightGenerations');
 
     // 5. Write initial generating doc
     const initialDoc: InsightDocument = {
@@ -153,6 +153,9 @@ export const generateInsight = onCall(
         }
       }
       await ref.update(finalUpdate);
+
+      // Increment rate limit only after successful generation
+      await incrementRateLimit(userId, 'insightGenerations');
 
       logger.info('Insight generation complete', { userId, insightId });
       return { cached: false, insightId };

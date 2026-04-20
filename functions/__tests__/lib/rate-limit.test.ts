@@ -53,7 +53,7 @@ vi.mock('../../src/lib/firestore', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { checkAndIncrementRateLimit, checkMessageLimit } from '../../src/lib/rate-limit';
+import { checkAndIncrementRateLimit, checkRateLimit, incrementRateLimit, checkMessageLimit } from '../../src/lib/rate-limit';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -210,6 +210,185 @@ describe('rate-limit', () => {
 
       expect(result.allowed).toBe(true);
       expect(result.remaining).toBe(0); // 6 - (5+1) = 0
+    });
+  });
+
+  describe('checkRateLimit', () => {
+    it('allows when under limit and returns remaining count', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 3,
+            windowStart: mockTimestamp(nowMs()),
+          },
+        }),
+      );
+
+      const result = await checkRateLimit('user-1', 'insightGenerations');
+
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(3); // 6 max - 3 used (no increment)
+    });
+
+    it('throws resource-exhausted when at the limit', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 6,
+            windowStart: mockTimestamp(nowMs()),
+          },
+        }),
+      );
+
+      await expect(
+        checkRateLimit('user-1', 'insightGenerations'),
+      ).rejects.toThrow(/resource-exhausted|Rate limit exceeded/i);
+    });
+
+    it('does NOT increment the counter (no write when window is active)', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 3,
+            windowStart: mockTimestamp(nowMs()),
+          },
+        }),
+      );
+
+      await checkRateLimit('user-1', 'insightGenerations');
+
+      // Should NOT have called tx.set since the window is still active and we're just checking
+      expect(mockTxSet).not.toHaveBeenCalled();
+    });
+
+    it('resets expired window and writes fresh window', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 6,
+            windowStart: mockTimestamp(hoursAgo(7)), // expired
+          },
+        }),
+      );
+
+      const result = await checkRateLimit('user-1', 'insightGenerations');
+
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(6); // fresh window: 6 - 0
+      // Should write the fresh window
+      expect(mockTxSet).toHaveBeenCalledTimes(1);
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          insightGenerations: expect.objectContaining({ count: 0 }),
+        }),
+        expect.objectContaining({ merge: true }),
+      );
+    });
+
+    it('allows first request when no rate limit doc exists', async () => {
+      mockTxGet.mockResolvedValue(createMockDocSnapshot(null));
+
+      const result = await checkRateLimit('user-1', 'chatSessions');
+
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(6); // fresh window: 6 - 0
+    });
+
+    it('includes resetAt date in the result', async () => {
+      const windowStartMs = nowMs();
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 2,
+            windowStart: mockTimestamp(windowStartMs),
+          },
+        }),
+      );
+
+      const result = await checkRateLimit('user-1', 'insightGenerations');
+
+      expect(result.resetAt).toBeInstanceOf(Date);
+      const expectedResetMs = windowStartMs + 6 * 60 * 60 * 1000;
+      expect(result.resetAt!.getTime()).toBeCloseTo(expectedResetMs, -2);
+    });
+  });
+
+  describe('incrementRateLimit', () => {
+    it('increments the counter by 1', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 3,
+            windowStart: mockTimestamp(nowMs()),
+          },
+        }),
+      );
+
+      await incrementRateLimit('user-1', 'insightGenerations');
+
+      expect(mockTxSet).toHaveBeenCalledTimes(1);
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          insightGenerations: expect.objectContaining({ count: 4 }),
+        }),
+        expect.objectContaining({ merge: true }),
+      );
+    });
+
+    it('resets expired window before incrementing', async () => {
+      mockTxGet.mockResolvedValue(
+        createMockDocSnapshot({
+          insightGenerations: {
+            count: 6,
+            windowStart: mockTimestamp(hoursAgo(7)), // expired
+          },
+        }),
+      );
+
+      await incrementRateLimit('user-1', 'insightGenerations');
+
+      expect(mockTxSet).toHaveBeenCalledTimes(1);
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          insightGenerations: expect.objectContaining({ count: 1 }), // fresh window: 0 + 1
+        }),
+        expect.objectContaining({ merge: true }),
+      );
+    });
+
+    it('creates a new window when no rate limit doc exists', async () => {
+      mockTxGet.mockResolvedValue(createMockDocSnapshot(null));
+
+      await incrementRateLimit('user-1', 'chatSessions');
+
+      expect(mockTxSet).toHaveBeenCalledTimes(1);
+      expect(mockTxSet).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          chatSessions: expect.objectContaining({ count: 1 }),
+        }),
+        expect.objectContaining({ merge: true }),
+      );
+    });
+
+    it('returns void', async () => {
+      mockTxGet.mockResolvedValue(createMockDocSnapshot(null));
+
+      const result = await incrementRateLimit('user-1', 'insightGenerations');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('uses a Firestore transaction for atomicity', async () => {
+      mockTxGet.mockResolvedValue(createMockDocSnapshot(null));
+
+      await incrementRateLimit('user-1', 'insightGenerations');
+
+      expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+      expect(mockRunTransaction).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 

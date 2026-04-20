@@ -419,4 +419,53 @@ describe('sendChatMessage', () => {
     expect(result.success).toBe(true);
     expect(result.messageIndex).toBe(5); // messageCount=4 -> user=4, model=5
   });
+
+  it('sets session title from first user message when messageCount is 0', async () => {
+    mockSessionGet.mockResolvedValue(
+      createMockDocSnapshot(
+        createActiveSession({ messageCount: 0 }),
+        'session-1',
+      ),
+    );
+
+    const request = createMockRequest(validData, 'user-1');
+    await sendChatMessage(request);
+
+    const generatingUpdate = mockSessionUpdate.mock.calls.find(
+      (call) => call[0].status === 'generating' && call[0].title !== undefined,
+    );
+    expect(generatingUpdate).toBeDefined();
+    expect(generatingUpdate![0].title).toBe('What patterns do you see in my trades?');
+  });
+
+  it('truncates session title to 50 characters on first message', async () => {
+    mockSessionGet.mockResolvedValue(
+      createMockDocSnapshot(
+        createActiveSession({ messageCount: 0 }),
+        'session-1',
+      ),
+    );
+
+    const longMessage = 'A'.repeat(100);
+    const request = createMockRequest({ sessionId: 'session-1', message: longMessage }, 'user-1');
+    await sendChatMessage(request);
+
+    const generatingUpdate = mockSessionUpdate.mock.calls.find(
+      (call) => call[0].status === 'generating' && call[0].title !== undefined,
+    );
+    expect(generatingUpdate).toBeDefined();
+    expect(generatingUpdate![0].title).toBe('A'.repeat(50));
+  });
+
+  it('does not set title on subsequent messages (messageCount > 0)', async () => {
+    // Default session has messageCount=4
+    const request = createMockRequest(validData, 'user-1');
+    await sendChatMessage(request);
+
+    const generatingUpdate = mockSessionUpdate.mock.calls.find(
+      (call) => call[0].status === 'generating',
+    );
+    expect(generatingUpdate).toBeDefined();
+    expect(generatingUpdate![0].title).toBeUndefined();
+  });
 });
