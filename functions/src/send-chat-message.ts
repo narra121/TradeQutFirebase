@@ -4,7 +4,7 @@ import { logger } from 'firebase-functions';
 import { chatSessionRef, chatMessagesCol } from './lib/firestore';
 import { checkMessageLimit } from './lib/rate-limit';
 import { getChatModel, geminiApiKey } from './lib/gemini';
-import { CHAT_SYSTEM_PROMPT } from './lib/prompts';
+import { CHAT_SYSTEM_PROMPT, CHAT_WITH_INSIGHTS_PROMPT } from './lib/prompts';
 import type { ChatSessionDocument, ChatMessageDocument, TrimmedTrade } from './types/insight';
 
 /** Minimum interval between Firestore writes during streaming (ms) */
@@ -123,15 +123,25 @@ export const sendChatMessage = onCall(
       const model = getChatModel();
       const tradeContext = buildTradeContext(session.trades);
 
+      // Use insights-aware prompt when insights data is available
+      let systemPrompt: string;
+      if (session.insightsData) {
+        systemPrompt = CHAT_WITH_INSIGHTS_PROMPT
+          .replace('{insightsData}', session.insightsData)
+          .replace('{tradeData}', tradeContext);
+      } else {
+        systemPrompt = `${CHAT_SYSTEM_PROMPT}\n\n${tradeContext}`;
+      }
+
       // Initial context pair: provide trade data as first exchange
       const contextHistory = [
         {
           role: 'user' as const,
-          parts: [{ text: `${CHAT_SYSTEM_PROMPT}\n\n${tradeContext}\n\nAcknowledge and be ready to answer.` }],
+          parts: [{ text: `${systemPrompt}\n\nAcknowledge and be ready to answer.` }],
         },
         {
           role: 'model' as const,
-          parts: [{ text: "I've reviewed your trading data. What would you like to know?" }],
+          parts: [{ text: "I've reviewed your trading data and insights report. What would you like to know?" }],
         },
         // Append all prior messages from the session
         ...history,

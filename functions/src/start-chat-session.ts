@@ -16,6 +16,8 @@ interface StartChatInput {
   accountId: string;
   period: string;
   tradesHash: string;
+  insightId?: string;
+  insightsData?: string;
 }
 
 function validateInput(data: unknown): StartChatInput {
@@ -39,6 +41,8 @@ function validateInput(data: unknown): StartChatInput {
     accountId: d.accountId as string,
     period: d.period as string,
     tradesHash: d.tradesHash as string,
+    insightId: typeof d.insightId === 'string' ? d.insightId : undefined,
+    insightsData: typeof d.insightsData === 'string' ? d.insightsData : undefined,
   };
 }
 
@@ -57,7 +61,7 @@ export const startChatSession = onCall(
     }
 
     // 2. Input validation
-    const { trades, accountId, period, tradesHash } = validateInput(request.data);
+    const { trades, accountId, period, tradesHash, insightId, insightsData } = validateInput(request.data);
 
     // 3. Rate limit check (verify quota BEFORE session creation)
     await checkRateLimit(userId, 'chatSessions');
@@ -80,6 +84,8 @@ export const startChatSession = onCall(
       createdAt: now,
       expiresAt,
       status: 'active',
+      ...(insightId && { insightId }),
+      ...(insightsData && { insightsData }),
     };
 
     const db = getDb();

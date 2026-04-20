@@ -45,6 +45,15 @@ Trade data:
 
 export const CHAT_SYSTEM_PROMPT = `You are an expert trading coach and performance analyst. You have access to the trader's complete trade data. Answer questions conversationally but with data-backed insights. When referencing specific trades, mention the symbol, date, and P&L. Be concise but thorough. If asked about patterns, reference specific examples from the data.`;
 
+export const CHAT_WITH_INSIGHTS_PROMPT = `You are an expert trading coach and performance analyst. You have already analyzed this trader's performance and generated the following insights report:
+
+{insightsData}
+
+The trader's raw trade data is also available:
+{tradeData}
+
+Answer the trader's questions conversationally with data-backed insights. Reference your analysis from the report when relevant. When mentioning specific trades, include the symbol, date, and P&L. Be concise but thorough.`;
+
 /**
  * Try to parse the accumulated text as a partial InsightsResponse.
  * Returns null if parsing fails (incomplete JSON).

@@ -99,6 +99,8 @@ export interface ChatSessionDocument {
   expiresAt: Timestamp;
   status: ChatSessionStatus;
   title?: string;
+  insightId?: string;
+  insightsData?: string;
 }
 
 export interface ChatMessageDocument {
