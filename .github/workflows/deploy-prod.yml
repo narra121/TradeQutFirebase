@@ -55,6 +55,6 @@ jobs:
       - name: Deploy Cloud Functions + Firestore Rules
         run: |
           firebase use ${{ secrets.GCP_PROJECT_ID }}
-          firebase deploy --only functions,firestore:rules,firestore:indexes
+          firebase deploy --only functions,firestore:rules,firestore:indexes --force
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
